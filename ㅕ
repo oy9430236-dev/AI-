@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chroma · 퍼스널 컬러 진단</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#eef8fc; --sky:#2fa8dc; --sky-dark:#1c86b8; --sky-pale:#e4f5fb; --sky-pale2:#d3edf7;
+    --text:#1b2a33; --muted:#6c7d86; --border:#e1eef3; --ok:#2e9e6d; --ok-bg:#e4f6ed;
+    --danger:#e04b3f; --danger-bg:#fdeae8; --white:#ffffff;
+    --spring:#f4a08c; --summer:#c3b4d9; --autumn:#b85c38; --winter:#7b1e3a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:linear-gradient(180deg, var(--bg) 0%, #f7fcfe 45%, #ffffff 100%);
+    min-height:100vh; font-family:'Noto Sans KR', sans-serif; color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1180px; margin:0 auto; padding:0 24px 90px;}
+  header.hero{padding:52px 0 34px;}
+  .eyebrow{display:inline-flex; align-items:center; gap:6px; background:var(--sky-pale); color:var(--sky-dark); font-size:12.5px; font-weight:700; padding:6px 14px; border-radius:999px; margin-bottom:18px;}
+  h1.title{font-size:clamp(26px,4vw,40px); font-weight:900; line-height:1.28; margin:0 0 14px; color:var(--text); max-width:720px;}
+  h1.title .accent{color:var(--sky);}
+  p.sub{font-size:15px; line-height:1.75; color:var(--muted); max-width:620px; margin:0; font-weight:500;}
+
+  .stepper{display:flex; gap:10px; margin-top:30px; flex-wrap:wrap;}
+  .stepper .step{flex:1 1 130px; background:var(--white); border:1px solid var(--border); border-radius:14px; padding:13px 14px; display:flex; align-items:center; gap:10px;}
+  .stepper .step .num{width:26px; height:26px; border-radius:50%; background:var(--sky-pale2); color:var(--sky-dark); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12.5px; flex-shrink:0;}
+  .stepper .step.active{background:var(--sky); border-color:var(--sky);}
+  .stepper .step.active .num{background:rgba(255,255,255,0.25); color:#fff;}
+  .stepper .step.active b, .stepper .step.active span{color:#fff !important;}
+  .stepper .step b{display:block; font-size:13px; font-weight:700; color:var(--text);}
+  .stepper .step span{font-size:11px; color:var(--muted); font-weight:500;}
+
+  main{display:grid; grid-template-columns:1.05fr 0.95fr; gap:22px; align-items:start;}
+  @media (max-width:880px){ main{grid-template-columns:1fr;} }
+  .panel{background:var(--white); border:1px solid var(--border); border-radius:20px; padding:24px; box-shadow:0 12px 32px -18px rgba(28,60,80,0.18);}
+  .panel h2{font-size:18px; font-weight:900; margin:0 0 4px; color:var(--text);}
+  .panel .desc{font-size:13px; color:var(--muted); margin:0 0 16px; line-height:1.55; font-weight:500;}
+
+  .controls{display:flex; gap:9px; flex-wrap:wrap; margin-bottom:14px;}
+  .btn{font-family:'Noto Sans KR',sans-serif; font-size:13px; font-weight:700; cursor:pointer; border:none; border-radius:999px; padding:11px 18px; transition:transform .12s ease, background .15s ease;}
+  .btn:active{transform:scale(0.96);}
+  .btn-primary{background:var(--sky); color:#fff;}
+  .btn-primary:hover{background:var(--sky-dark);}
+  .btn-ghost{background:var(--sky-pale); color:var(--sky-dark);}
+  .btn-outline{background:#fff; color:var(--muted); border:1.4px solid var(--border);}
+  .btn-outline:hover{border-color:var(--sky);}
+  .btn-sm{padding:8px 13px; font-size:12px;}
+  .btn-icon{width:38px; height:38px; padding:0; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(20,30,36,0.55); color:#fff; font-size:15px;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+
+  .scan-frame{position:relative; border-radius:16px; overflow:hidden; background:#0e1c24; aspect-ratio:4/5; max-height:460px; display:flex; align-items:center; justify-content:center;}
+  .scan-frame canvas{width:100%; height:100%; object-fit:contain; display:block; cursor:crosshair;}
+  .click-layer{position:absolute; inset:0; z-index:3; pointer-events:none;}
+  .click-marker{position:absolute; width:26px; height:26px; margin:-13px; border-radius:50%; border:2.5px solid; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900; color:#fff; background:rgba(0,0,0,0.25);}
+  .video-wrap{position:absolute; inset:0; overflow:hidden; display:none;}
+  .video-wrap.active{display:block;}
+  .scan-frame video{width:100%; height:100%; object-fit:cover; transform:scaleX(-1); transition:transform .15s ease;}
+  .guide-svg{position:absolute; inset:0; pointer-events:none; z-index:2;}
+  .grid-svg{position:absolute; inset:0; pointer-events:none; z-index:1; display:none;}
+  .grid-svg.show{display:block;}
+  .status-pill{position:absolute; top:12px; left:12px; z-index:4; display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.92); color:var(--text); font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px;}
+  .status-pill .dot{width:7px; height:7px; border-radius:50%; background:var(--muted);}
+  .status-pill.live .dot{background:var(--danger); animation:blink 1.2s infinite;}
+  .status-pill.done .dot{background:var(--ok);}
+  .status-pill.busy .dot{background:var(--sky); animation:blink 0.9s infinite;}
+  @keyframes blink{0%,100%{opacity:1;} 50%{opacity:0.25;}}
+  .cam-toolbar{position:absolute; top:12px; right:12px; z-index:4; display:flex; gap:8px;}
+  .flash-overlay{position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:10; transition:opacity .1s ease;}
+  .flash-overlay.flash{opacity:0.85; transition:opacity 0s;}
+  .empty-canvas-msg{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:rgba(255,255,255,0.55); text-align:center; padding:0 30px; z-index:2;}
+  .empty-canvas-msg p{font-size:12.5px; line-height:1.6; margin:0; font-weight:500;}
+
+  .perm-gate{position:absolute; inset:0; z-index:20; background:rgba(14,28,36,0.72); backdrop-filter:blur(2px); display:none; align-items:center; justify-content:center; padding:24px;}
+  .perm-gate.show{display:flex;}
+  .perm-card{background:#fff; border-radius:18px; padding:26px 22px; max-width:290px; text-align:center;}
+  .perm-card .ic{width:52px; height:52px; border-radius:50%; background:var(--sky-pale); display:flex; align-items:center; justify-content:center; margin:0 auto 14px;}
+  .perm-card h3{font-size:15.5px; font-weight:900; margin:0 0 8px; color:var(--text);}
+  .perm-card p{font-size:12.5px; color:var(--muted); line-height:1.6; margin:0 0 18px; font-weight:500;}
+  .perm-actions{display:flex; gap:8px;}
+  .perm-actions .btn{flex:1;}
+
+  .shutter-row{display:flex; align-items:center; justify-content:center; gap:22px; margin-top:14px;}
+  .shutter-btn{width:64px; height:64px; border-radius:50%; background:#fff; border:3px solid var(--sky); cursor:pointer; position:relative; flex-shrink:0;}
+  .shutter-btn::after{content:""; position:absolute; inset:5px; border-radius:50%; background:var(--sky); transition:transform .12s ease;}
+  .shutter-btn:active::after{transform:scale(0.85);}
+  .shutter-label{font-size:11px; color:var(--muted); text-align:center; margin-top:5px; font-weight:600;}
+
+  .tool-strip{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .tool-chip{display:flex; align-items:center; gap:6px; background:var(--sky-pale); color:var(--sky-dark); font-size:12px; font-weight:700; padding:7px 12px; border-radius:999px; border:none; cursor:pointer;}
+  .tool-chip.on{background:var(--sky); color:#fff;}
+  .slider-block{margin-top:14px; background:var(--sky-pale); border-radius:14px; padding:13px 15px;}
+  .slider-row{display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text); font-weight:700;}
+  .slider-row label{flex:0 0 40px;}
+  .slider-row input[type=range]{flex:1; accent-color:var(--sky);}
+  .slider-row .val{flex:0 0 42px; text-align:right; font-size:11.5px; color:var(--muted); font-weight:600;}
+
+  .status-line{margin-top:14px; font-size:13px; color:var(--text); font-weight:700; min-height:20px;}
+  .banner-msg{margin-top:10px; padding:10px 13px; border-radius:11px; font-size:12px; line-height:1.55; font-weight:500; display:none;}
+  .banner-msg.show{display:block;}
+  .banner-msg.error{background:var(--danger-bg); color:#a3352b;}
+  .banner-msg.info{background:var(--sky-pale); color:var(--sky-dark);}
+  .banner-msg.ok{background:var(--ok-bg); color:#1f7a51;}
+
+  .readout{display:flex; gap:9px; margin-top:14px; flex-wrap:wrap;}
+  .readout .chip{flex:1 1 90px; background:#fbfdfe; border:1px solid var(--border); border-radius:12px; padding:8px 10px; display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); font-weight:600;}
+  .readout .chip .sw{width:18px; height:18px; border-radius:6px; border:1px solid rgba(0,0,0,0.06); flex-shrink:0;}
+  .readout .chip.empty .sw{background:repeating-linear-gradient(45deg,#eef3f5,#eef3f5 4px,#fbfdfe 4px,#fbfdfe 8px);}
+  .readout .chip b{display:block; color:var(--text); font-size:11.5px;}
+
+  #resultPanel{display:none;}
+  #resultPanel.show{display:block; animation:fadeUp .5s ease;}
+  @keyframes fadeUp{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  .season-banner{border-radius:16px; padding:20px 22px; margin-bottom:18px; position:relative; overflow:hidden;}
+  .season-banner .tag{font-size:11px; font-weight:800; letter-spacing:0.06em; opacity:0.9; text-transform:uppercase;}
+  .season-banner h3{font-size:26px; font-weight:900; margin:6px 0 7px;}
+  .season-banner p{font-size:13px; margin:0; opacity:0.95; max-width:420px; line-height:1.55; font-weight:500;}
+  .swatch-group{margin-bottom:16px;}
+  .swatch-group h4{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin:0 0 9px; font-weight:800;}
+  .swatches{display:flex; gap:9px;}
+  .swatch{flex:1; border-radius:14px; padding:13px 11px 11px; min-height:68px; display:flex; flex-direction:column; justify-content:flex-end;}
+  .swatch .name{font-weight:800; font-size:13.5px;}
+  .swatch .hex{font-size:10.5px; opacity:0.85; font-weight:600;}
+  .style-tip{background:var(--sky-pale); border-radius:14px; padding:14px 15px; font-size:12.5px; color:var(--text); line-height:1.65; font-weight:500;}
+  .ar-box{background:#0e1c24; border-radius:14px; padding:12px; margin-top:4px;}
+  .ar-box .lbl{font-size:11px; color:#bcd8e6; margin-bottom:8px; font-weight:700;}
+  .ar-box canvas{width:100%; border-radius:8px; display:block;}
+  .disclaimer{margin-top:14px; font-size:11px; color:var(--muted); line-height:1.65; border-top:1px solid var(--border); padding-top:12px; font-weight:500;}
+  .reset-row{margin-top:18px; display:flex; justify-content:flex-end;}
+  .empty-state{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:56px 20px; color:var(--muted); gap:10px; min-height:300px;}
+  .empty-state .ic{width:52px; height:52px; border-radius:50%; background:var(--sky-pale); display:flex; align-items:center; justify-content:center;}
+  .empty-state p{font-size:13px; max-width:250px; line-height:1.6; margin:0; font-weight:500;}
+  footer{margin-top:38px; font-size:11.5px; color:var(--muted); text-align:center; line-height:1.7; font-weight:500;}
+  input[type=file]{display:none;}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="hero">
+    <div class="eyebrow">✦ BEAUTY TECH · LIVE DIAGNOSIS</div>
+    <h1 class="title">얼굴 좌표로 진단하는<br/><span class="accent">퍼스널 컬러</span> 추천 알고리즘</h1>
+    <p class="sub">실시간 웹캠 또는 사진에서 피부·헤어·입술 색상을 분석해 웜톤/쿨톤과 4계절 톤을 판별하고, 어울리는 메이크업·헤어 컬러 추천과 가상 메이크업까지 한 번에 확인하세요.</p>
+    <div class="stepper" id="pipeline">
+      <div class="step" data-step="1"><span class="num">1</span><div><b>안면 스캔</b><span>좌표·색상 추출</span></div></div>
+      <div class="step" data-step="2"><span class="num">2</span><div><b>조건 분류</b><span>웜/쿨톤 판별</span></div></div>
+      <div class="step" data-step="3"><span class="num">3</span><div><b>컬러 매칭</b><span>메이크업·헤어</span></div></div>
+      <div class="step" data-step="4"><span class="num">4</span><div><b>AR 시각화</b><span>가상 메이크업</span></div></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>안면 스캔</h2>
+      <p class="desc">웹캠으로 촬영하거나 사진을 업로드한 뒤, 얼굴 위 <b>피부(볼) → 헤어 → 입술</b> 순서로 3곳을 직접 클릭(터치)하면 색상을 분석합니다.</p>
+      <div class="controls">
+        <button class="btn btn-primary" id="btnWebcam">📷 웹캠으로 진단</button>
+        <button class="btn btn-outline" id="btnUpload">사진 업로드</button>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <div class="scan-frame" id="scanFrame">
+        <canvas id="scanCanvas" width="600" height="750"></canvas>
+        <div class="video-wrap" id="videoWrap"><video id="webcamVideo" autoplay playsinline muted></video></div>
+        <svg class="grid-svg" id="gridSvg" viewBox="0 0 600 750">
+          <line x1="200" y1="0" x2="200" y2="750" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+          <line x1="400" y1="0" x2="400" y2="750" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+          <line x1="0" y1="250" x2="600" y2="250" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+          <line x1="0" y1="500" x2="600" y2="500" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>
+        </svg>
+        <div class="click-layer" id="clickLayer"></div>
+        <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusPillText">대기 중</span></div>
+        <div class="cam-toolbar" id="camToolbar" style="display:none;"><button class="btn-icon" id="btnFlip" title="카메라 전환">⟲</button></div>
+        <div class="flash-overlay" id="flashOverlay"></div>
+        <div class="empty-canvas-msg" id="emptyCanvasMsg">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l2-3h4l2 3"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+          <p>웹캠으로 진단하거나<br/>사진을 업로드해주세요</p>
+        </div>
+        <div class="perm-gate" id="permGate">
+          <div class="perm-card">
+            <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2fa8dc" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l2-3h4l2 3"/><circle cx="12" cy="13.5" r="3.5"/></svg></div>
+            <h3>카메라 접근 권한이 필요해요</h3>
+            <p>얼굴 색상 분석을 위해 카메라를 사용합니다. 촬영된 영상은 브라우저 내에서만 처리되며 저장·전송되지 않아요.</p>
+            <div class="perm-actions">
+              <button class="btn btn-outline btn-sm" id="btnPermDeny">거절</button>
+              <button class="btn btn-primary btn-sm" id="btnPermAllow">허용</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tool-strip" id="camToolStrip" style="display:none;"><button class="tool-chip" id="btnGrid">▦ 그리드</button></div>
+
+      <div id="shutterArea" style="display:none;">
+        <div class="shutter-row">
+          <button class="btn btn-outline btn-sm" id="btnCancelWebcam">취소</button>
+          <div><div class="shutter-btn" id="btnCapture"></div><div class="shutter-label">촬영</div></div>
+          <div style="width:74px;"></div>
+        </div>
+      </div>
+
+      <div id="sliderArea" style="display:none;">
+        <div class="slider-block">
+          <div class="slider-row"><label>줌</label><input type="range" id="zoomSlider" min="1" max="2.5" step="0.05" value="1"><span class="val" id="zoomVal">1.0x</span></div>
+        </div>
+      </div>
+
+      <div class="status-line" id="statusLine">웹캠을 켜거나 사진을 업로드하면 시작됩니다</div>
+      <div class="banner-msg" id="bannerMsg"></div>
+      <div class="readout">
+        <div class="chip empty" id="chipSkin"><span class="sw"></span><div>피부<b>—</b></div></div>
+        <div class="chip empty" id="chipHair"><span class="sw"></span><div>헤어<b>—</b></div></div>
+        <div class="chip empty" id="chipLip"><span class="sw"></span><div>입술<b>—</b></div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div id="emptyState" class="empty-state">
+        <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2fa8dc" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+        <p>분석이 완료되면<br/>진단 결과와 추천 컬러가 이곳에 표시됩니다</p>
+      </div>
+      <div id="resultPanel">
+        <h2>진단 결과</h2>
+        <p class="desc">피부 색상의 웜/쿨 기운과 선명도(clarity)를 분석한 결과입니다.</p>
+        <div class="season-banner" id="seasonBanner">
+          <div class="tag" id="seasonTag">UNDERTONE / SEASON</div>
+          <h3 id="seasonName">—</h3>
+          <p id="seasonDesc">—</p>
+        </div>
+        <div class="swatch-group"><h4>추천 메이크업 컬러</h4><div class="swatches" id="makeupSwatches"></div></div>
+        <div class="swatch-group"><h4>추천 헤어 컬러</h4><div class="swatches" id="hairSwatches"></div></div>
+        <div class="swatch-group">
+          <h4>헤어스타일링 추천</h4>
+          <div class="style-tip" id="styleTip">—</div>
+        </div>
+        <div class="ar-box"><div class="lbl">◆ AR 가상 메이크업 시각화</div><canvas id="arCanvas" width="600" height="750"></canvas></div>
+        <div class="disclaimer">
+          ※ 색상 데이터를 이용한 간이 추정으로, 실제 전문가 진단과 차이가 있을 수 있습니다. 자연광에서 정면으로 촬영하면 정확도가 높아집니다.<br/>
+          ※ 촬영·업로드된 이미지는 브라우저 내에서만 분석되며 외부 서버로 전송되지 않습니다.
+        </div>
+        <div class="reset-row"><button class="btn btn-outline btn-sm" id="btnReset">다시 진단하기</button></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>얼굴 좌표 기반 퍼스널 컬러 추천 알고리즘 · 탐구발표 프로토타입<br/>Lab 색공간 기반 웜/쿨·선명도 분석으로 조명 영향을 줄인 간이 진단 데모입니다.</footer>
+</div>
+
+<script>
+(function(){
+  const scanCanvas = document.getElementById('scanCanvas');
+  const sctx = scanCanvas.getContext('2d', { willReadFrequently: true });
+  const arCanvas = document.getElementById('arCanvas');
+  const actx = arCanvas.getContext('2d');
+  const fileInput = document.getElementById('fileInput');
+  const webcamVideo = document.getElementById('webcamVideo');
+  const videoWrap = document.getElementById('videoWrap');
+  const shutterArea = document.getElementById('shutterArea');
+  const sliderArea = document.getElementById('sliderArea');
+  const gridSvg = document.getElementById('gridSvg');
+  const clickLayer = document.getElementById('clickLayer');
+  const emptyCanvasMsg = document.getElementById('emptyCanvasMsg');
+  const statusLine = document.getElementById('statusLine');
+  const bannerMsg = document.getElementById('bannerMsg');
+  const statusPill = document.getElementById('statusPill');
+  const statusPillText = document.getElementById('statusPillText');
+  const camToolbar = document.getElementById('camToolbar');
+  const camToolStrip = document.getElementById('camToolStrip');
+  const permGate = document.getElementById('permGate');
+  const flashOverlay = document.getElementById('flashOverlay');
+  const zoomSlider = document.getElementById('zoomSlider');
+  const zoomVal = document.getElementById('zoomVal');
+
+  let activeStream = null;
+  let sourceImg = null;
+  let zoomLevel = 1;
+  let analyzeTimer = null;
+  let facingMode = 'user';
+  let gridOn = false;
+
+  const CANVAS_W = 600, CANVAS_H = 750;
+  const PATCH = 11;
+
+  const STEPS = [
+    { key:'skin', label:'피부(볼)', ring:'#2fa8dc' },
+    { key:'hair', label:'헤어', ring:'#7c5cbf' },
+    { key:'lip',  label:'입술', ring:'#e0483c' },
+  ];
+  let stepIndex = 0;
+  let samples = {};
+
+  // 사용자 제공 4계절 기준 데이터 (헤어/메이크업 추천 반영)
+  const SEASONS = {
+    spring: { name:'봄 웜톤', tag:'WARM · CLEAR', theme:'#f4a08c',
+      desc:'따뜻하고 밝은 느낌, 생기 있고 투명한 피부 톤.',
+      makeup:[{name:'피치',hex:'#f7b79e'},{name:'코랄',hex:'#ff8a65'}],
+      hair:[{name:'밀크 브라운',hex:'#c89b72'},{name:'골드 브라운',hex:'#b98243'}],
+      blush:'#f7b79e', lip:'#ef7452',
+      styleTip:'가볍고 자연스러운 웨이브 펌으로 화사함을 살려보세요. 앞머리는 볼륨감 있게 띄우고, 전체적으로 층을 낸 레이어드 컷이 잘 어울려요. 힘 있는 컬보다는 부드럽고 가벼운 C컬·S컬 웨이브를 추천해요.' },
+    summer: { name:'여름 쿨톤', tag:'COOL · SOFT', theme:'#9d87c2',
+      desc:'차갑고 시원한 느낌, 밝고 붉은기가 도는 맑은 피부 톤. 부드러운 인상.',
+      makeup:[{name:'라벤더',hex:'#c3b4d9'},{name:'로즈 핑크',hex:'#d98ba5'}],
+      hair:[{name:'애쉬 브라운',hex:'#8a7a6d'},{name:'다크 브라운',hex:'#5c4a3d'}],
+      blush:'#e6a8bd', lip:'#c46f8c',
+      styleTip:'과한 볼륨보다는 차분하게 흐르는 자연스러운 웨이브나 레이어드 단발이 잘 어울려요. 매끈한 미디엄 스트레이트도 좋은 선택이에요. 지나치게 각진 커트나 강한 웨이브는 인상을 세 보이게 할 수 있어 피하는 게 좋아요.' },
+    autumn: { name:'가을 웜톤', tag:'WARM · DEEP', theme:'#b85c38',
+      desc:'따뜻하고 차분하며 깊이 있는 느낌, 황색조가 도는 건강하고 고급스러운 피부 톤.',
+      makeup:[{name:'테라코타',hex:'#c1704a'},{name:'브릭 레드',hex:'#a94b37'}],
+      hair:[{name:'다크 초코',hex:'#4a2f22'},{name:'카키 브라운',hex:'#7a6a4f'}],
+      blush:'#c1774f', lip:'#a3452c',
+      styleTip:'무게감 있는 히피펌이나 굵은 웨이브로 차분하고 고급스러운 분위기를 살려보세요. 낮은 명도의 자연스러운 레이어드 컷도 잘 어울려요. 밝고 화사한 톤보다는 차분한 무드의 스타일링이 얼굴빛과 잘 어우러져요.' },
+    winter: { name:'겨울 쿨톤', tag:'COOL · VIVID', theme:'#7b1e3a',
+      desc:'차갑고 강렬한 느낌, 이목구비와 피부·머리카락 색상 간의 대비가 뚜렷한 선명하고 도시적인 인상.',
+      makeup:[{name:'푸시아 핑크',hex:'#d6336c'},{name:'체리 레드',hex:'#c41e3a'}],
+      hair:[{name:'흑발',hex:'#0e0e10'},{name:'블루 블랙',hex:'#161a24'}],
+      blush:'#d1547a', lip:'#b81f3c',
+      styleTip:'깔끔한 단발(보브)이나 곧게 떨어지는 스트레이트 헤어로 선명한 대비와 도시적인 이미지를 강조해보세요. 힘 있는 일자 앞머리도 잘 어울려요. 흐트러진 웨이브보다는 정돈된 실루엣이 톤의 강렬함을 살려줘요.' }
+  };
+
+  // ---------- 색공간 변환 (sRGB → CIE Lab) ----------
+  function srgbToLinear(c){ c/=255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  function rgbToLab(r,g,b){
+    const rl=srgbToLinear(r), gl=srgbToLinear(g), bl=srgbToLinear(b);
+    const x = rl*0.4124 + gl*0.3576 + bl*0.1805;
+    const y = rl*0.2126 + gl*0.7152 + bl*0.0722;
+    const z = rl*0.0193 + gl*0.1192 + bl*0.9505;
+    const Xn=0.95047, Yn=1.0, Zn=1.08883;
+    const f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116);
+    const fx=f(x/Xn), fy=f(y/Yn), fz=f(z/Zn);
+    return { L:116*fy-16, a:500*(fx-fy), b:200*(fy-fz) };
+  }
+  function hueAngle(a,b){ let h = Math.atan2(b,a) * 180/Math.PI; if(h<0) h+=360; return h; }
+  function chroma(a,b){ return Math.sqrt(a*a + b*b); }
+  function hexFromRGB(r,g,b){ return '#' + [r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join(''); }
+  function textColorFor(hex){
+    const v = hex.replace('#',''); const r=parseInt(v.substring(0,2),16), g=parseInt(v.substring(2,4),16), b=parseInt(v.substring(4,6),16);
+    return (r*299+g*587+b*114)/1000 >= 165 ? '#2a2010' : '#ffffff';
+  }
+  function hexToRgba(hex, alpha){
+    const v = hex.replace('#',''); const r=parseInt(v.substring(0,2),16), g=parseInt(v.substring(2,4),16), b=parseInt(v.substring(4,6),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  function setActiveStep(n){ document.querySelectorAll('#pipeline .step').forEach((p,i)=> p.classList.toggle('active', i===n-1)); }
+  function setStatus(text){ statusLine.textContent = text; }
+  function setPill(text, mode){ statusPillText.textContent = text; statusPill.className = 'status-pill' + (mode?' '+mode:''); }
+  function showBanner(msg, type){ bannerMsg.textContent = msg; bannerMsg.className = 'banner-msg show ' + (type||'info'); }
+  function hideBanner(){ bannerMsg.className = 'banner-msg'; }
+
+  function renderChip(key, rgb){
+    const map = {skin:'chipSkin', hair:'chipHair', lip:'chipLip'};
+    const el = document.getElementById(map[key]); el.classList.remove('empty');
+    const hex = hexFromRGB(rgb.r, rgb.g, rgb.b);
+    el.querySelector('.sw').style.background = hex; el.querySelector('b').textContent = hex;
+  }
+  function clearChips(){
+    ['chipSkin','chipHair','chipLip'].forEach(id=>{
+      const el = document.getElementById(id); el.classList.add('empty');
+      el.querySelector('.sw').style.background=''; el.querySelector('b').textContent='—';
+    });
+  }
+
+  function drawSourceToCanvas(){
+    if(!sourceImg) return;
+    sctx.clearRect(0,0,CANVAS_W,CANVAS_H);
+    const scale = Math.max(CANVAS_W / sourceImg.width, CANVAS_H / sourceImg.height);
+    const w = sourceImg.width*scale, h = sourceImg.height*scale;
+    sctx.drawImage(sourceImg, (CANVAS_W-w)/2, (CANVAS_H-h)/2, w, h);
+  }
+
+  function sampleRegion(cx, cy){
+    const x0 = Math.max(0, cx-PATCH), y0 = Math.max(0, cy-PATCH);
+    const w = Math.min(CANVAS_W - x0, PATCH*2), h = Math.min(CANVAS_H - y0, PATCH*2);
+    const data = sctx.getImageData(x0, y0, w, h).data;
+    let r=0,g=0,b=0,n=0;
+    for(let i=0;i<data.length;i+=4){ r+=data[i]; g+=data[i+1]; b+=data[i+2]; n++; }
+    return { r:r/n, g:g/n, b:b/n };
+  }
+  function averageTwo(a,b){ return { r:(a.r+b.r)/2, g:(a.g+b.g)/2, b:(a.b+b.b)/2 }; }
+
+  // ---------- 판정 로직 (개선판) ----------
+  // 기존 문제: 헤어 명암을 톤 깊이의 기준으로 삼으면 검은/짙은 헤어가 대부분인 경우
+  // 항상 '가을·겨울(deep)' 쪽으로 쏠리는 편향이 있었음.
+  // → 헤어 대비 대신, 피부 자체의 채도(clarity, C*)를 깊이 축으로 사용해 편향을 제거함.
+  //   웜/쿨: 색상각(hue) · 맑음/차분함: 채도(chroma) + 피부-헤어 대비 보조
+  //
+  // 개선 이력: chroma(채도)는 쿨톤 피부에서 구조적으로 더 낮게 측정되는 경향이 있어
+  // 웜톤과 같은 임계값(26)을 쓰면 '쿨톤+선명(겨울)' 조합이 거의 나오지 않는 문제가 있었음.
+  // → 쿨톤 전용으로 clear 임계값을 낮추고, 이목구비 대비(피부-헤어 명도차)를 보조 신호로 추가.
+  function classify(skinRGB, hairRGB){
+    const lab = rgbToLab(skinRGB.r, skinRGB.g, skinRGB.b);
+    const hue = hueAngle(lab.a, lab.b);
+    const c = chroma(lab.a, lab.b);
+    const warm = hue >= 48;                     // 황색조(웜) vs 붉은/청색조(쿨)
+    const clearThresh = warm ? 24 : 15;          // 쿨톤은 채도 기준을 완화
+    let clear = c >= clearThresh;
+
+    if(!warm && hairRGB){
+      const hairLab = rgbToLab(hairRGB.r, hairRGB.g, hairRGB.b);
+      const contrast = lab.L - hairLab.L;        // 피부-헤어 명도 대비 (겨울의 '선명한 대비' 특징 반영)
+      if(contrast >= 38) clear = true;           // 대비가 뚜렷하면 겨울 쪽으로
+      else if(contrast <= 18) clear = false;      // 대비가 약하면 여름 쪽으로
+    }
+
+    const key = warm ? (clear ? 'spring' : 'autumn') : (clear ? 'winter' : 'summer');
+    return { key, hue, c };
+  }
+
+  function startClickSampling(){
+    drawSourceToCanvas();
+    stepIndex = 0; samples = {};
+    clickLayer.innerHTML = '';
+    clearChips();
+    setActiveStep(1);
+    setStatus('① 피부(볼) 부분을 클릭하세요');
+    setPill('클릭 대기', '');
+  }
+
+  function addMarker(x, y, ring, label){
+    const d = document.createElement('div');
+    d.className = 'click-marker';
+    d.style.left = (x / CANVAS_W * 100) + '%';
+    d.style.top = (y / CANVAS_H * 100) + '%';
+    d.style.borderColor = ring;
+    d.textContent = label;
+    clickLayer.appendChild(d);
+  }
+
+  function handleCanvasClick(e){
+    if(!sourceImg || stepIndex >= STEPS.length) return;
+    const rect = scanCanvas.getBoundingClientRect();
+    const x = Math.round((e.clientX - rect.left) * (CANVAS_W / rect.width));
+    const y = Math.round((e.clientY - rect.top) * (CANVAS_H / rect.height));
+    const step = STEPS[stepIndex];
+    const rgb = sampleRegion(x, y);
+    samples[step.key] = { ...rgb, x, y };
+    renderChip(step.key, rgb);
+    addMarker(x, y, step.ring, String(stepIndex+1));
+    stepIndex++;
+
+    if(stepIndex < STEPS.length){
+      const marks = ['①','②','③'];
+      setStatus(`${marks[stepIndex]} ${STEPS[stepIndex].label} 부분을 클릭하세요`);
+      setPill('클릭 대기', '');
+    } else {
+      finishAnalysis();
+    }
+  }
+  scanCanvas.addEventListener('click', handleCanvasClick);
+
+  function finishAnalysis(){
+    setActiveStep(2); setStatus('색상 데이터를 분석하는 중...'); setPill('분석 중', 'busy');
+    clearTimeout(analyzeTimer);
+    analyzeTimer = setTimeout(()=>{
+      const result = classify(samples.skin, samples.hair);
+      setActiveStep(3);
+      showResult(result.key);
+      setActiveStep(4);
+      setStatus('분석 완료 — 오른쪽에서 결과를 확인하세요');
+      setPill(SEASONS[result.key].name, 'done');
+    }, 420);
+  }
+
+  function drawLipPath(ctx, cx, cy, s){
+    ctx.beginPath();
+    ctx.moveTo(cx-27*s, cy+2*s);
+    ctx.bezierCurveTo(cx-15*s, cy-10*s, cx-6*s, cy-3*s, cx, cy-5*s);
+    ctx.bezierCurveTo(cx+6*s, cy-3*s, cx+15*s, cy-10*s, cx+27*s, cy+2*s);
+    ctx.bezierCurveTo(cx+17*s, cy+15*s, cx-17*s, cy+15*s, cx-27*s, cy+2*s);
+    ctx.closePath();
+  }
+
+  function showResult(seasonKey){
+    const s = SEASONS[seasonKey];
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultPanel').classList.add('show');
+
+    const banner = document.getElementById('seasonBanner');
+    banner.style.background = `linear-gradient(120deg, ${s.theme}, ${s.theme}cc)`;
+    banner.style.color = textColorFor(s.theme);
+    document.getElementById('seasonTag').textContent = s.tag;
+    document.getElementById('seasonName').textContent = s.name;
+    document.getElementById('seasonDesc').textContent = s.desc;
+
+    const mk = document.getElementById('makeupSwatches'); mk.innerHTML='';
+    s.makeup.forEach(c=>{
+      const d = document.createElement('div'); d.className='swatch'; d.style.background=c.hex; d.style.color=textColorFor(c.hex);
+      d.innerHTML = `<span class="name">${c.name}</span><span class="hex">${c.hex}</span>`; mk.appendChild(d);
+    });
+    const hr = document.getElementById('hairSwatches'); hr.innerHTML='';
+    s.hair.forEach(c=>{
+      const d = document.createElement('div'); d.className='swatch'; d.style.background=c.hex; d.style.color=textColorFor(c.hex);
+      d.innerHTML = `<span class="name">${c.name}</span><span class="hex">${c.hex}</span>`; hr.appendChild(d);
+    });
+    document.getElementById('styleTip').textContent = s.styleTip;
+
+    arCanvas.width = CANVAS_W; arCanvas.height = CANVAS_H;
+    actx.clearRect(0,0,CANVAS_W,CANVAS_H);
+    actx.drawImage(scanCanvas, 0, 0);
+
+    // 블러셔 — 클릭한 볼 지점과 그 대칭 위치에 부드러운 그라데이션 (multiply)
+    actx.save(); actx.globalCompositeOperation = 'multiply';
+    const skinPt = samples.skin;
+    [skinPt, { x: CANVAS_W - skinPt.x, y: skinPt.y }].forEach(pt=>{
+      const r = 46;
+      const g = actx.createRadialGradient(pt.x, pt.y, 4, pt.x, pt.y, r);
+      g.addColorStop(0, hexToRgba(s.blush, 0.4)); g.addColorStop(0.55, hexToRgba(s.blush, 0.2)); g.addColorStop(1, hexToRgba(s.blush, 0));
+      actx.fillStyle = g; actx.beginPath(); actx.arc(pt.x, pt.y, r, 0, Math.PI*2); actx.fill();
+    });
+    actx.restore();
+
+    // 입술 — 클릭한 입술 지점에 실제 입술 실루엣으로 클리핑 후 'color' 블렌드로 자연스러운 음영 유지
+    const lp = samples.lip;
+    actx.save();
+    drawLipPath(actx, lp.x, lp.y, 1);
+    actx.clip();
+    actx.globalCompositeOperation = 'color';
+    actx.fillStyle = s.lip;
+    actx.fillRect(lp.x-40, lp.y-32, 80, 64);
+    actx.globalCompositeOperation = 'multiply';
+    actx.globalAlpha = 0.22;
+    actx.fillRect(lp.x-40, lp.y-32, 80, 64);
+    actx.restore();
+
+    // 입술 하이라이트 (soft-light, 클리핑 내부)
+    actx.save();
+    drawLipPath(actx, lp.x, lp.y, 1);
+    actx.clip();
+    actx.globalCompositeOperation = 'soft-light';
+    actx.globalAlpha = 0.5;
+    const gloss = actx.createRadialGradient(lp.x, lp.y-4, 1, lp.x, lp.y-4, 15);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.9)'); gloss.addColorStop(1, 'rgba(255,255,255,0)');
+    actx.fillStyle = gloss; actx.beginPath(); actx.ellipse(lp.x, lp.y-4, 14, 6, 0, 0, Math.PI*2); actx.fill();
+    actx.restore();
+  }
+
+  function resetAll(){
+    stopWebcam(); sourceImg = null; clearTimeout(analyzeTimer);
+    sctx.clearRect(0,0,CANVAS_W,CANVAS_H);
+    stepIndex = 0; samples = {}; clickLayer.innerHTML = '';
+    emptyCanvasMsg.style.display = 'flex'; gridSvg.classList.remove('show');
+    sliderArea.style.display = 'none'; shutterArea.style.display = 'none';
+    camToolbar.style.display = 'none'; camToolStrip.style.display = 'none';
+    document.getElementById('resultPanel').classList.remove('show');
+    document.getElementById('emptyState').style.display = 'flex';
+    clearChips(); setActiveStep(1);
+    setStatus('웹캠을 켜거나 사진을 업로드하면 시작됩니다'); setPill('대기 중', ''); hideBanner();
+  }
+
+  function stopWebcam(){
+    if(activeStream){ activeStream.getTracks().forEach(t=>t.stop()); activeStream = null; }
+    videoWrap.classList.remove('active'); webcamVideo.srcObject = null;
+  }
+
+  document.getElementById('btnWebcam').addEventListener('click', ()=>{ hideBanner(); permGate.classList.add('show'); });
+  document.getElementById('btnPermDeny').addEventListener('click', ()=>{
+    permGate.classList.remove('show');
+    showBanner('카메라 사용이 취소되었어요. 언제든 다시 시도하거나 사진 업로드를 이용해주세요.', 'info');
+  });
+  document.getElementById('btnPermAllow').addEventListener('click', async ()=>{ permGate.classList.remove('show'); await startWebcam(); });
+
+  async function startWebcam(){
+    if(!window.isSecureContext){
+      showBanner('카메라는 HTTPS(보안 연결) 환경에서만 사용할 수 있어요. GitHub Pages 등 https 주소로 접속했는지 확인해주세요.', 'error'); return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showBanner('이 브라우저는 카메라 기능을 지원하지 않아요. 최신 Chrome/Safari에서 시도하거나 사진 업로드를 이용해주세요.', 'error'); return;
+    }
+    setPill('권한 요청 중', 'busy');
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode, width:{ideal:900}, height:{ideal:1125} }, audio:false });
+      activeStream = stream;
+      webcamVideo.muted = true; webcamVideo.srcObject = stream;
+      await webcamVideo.play().catch(()=>{});
+      videoWrap.classList.add('active');
+      emptyCanvasMsg.style.display = 'none';
+      shutterArea.style.display = 'block'; sliderArea.style.display = 'block';
+      camToolbar.style.display = 'flex'; camToolStrip.style.display = 'flex';
+      zoomSlider.value = 1; zoomLevel = 1; zoomVal.textContent = '1.0x';
+      webcamVideo.style.transform = 'scaleX(-1) scale(1)';
+      setStatus('실시간 미리보기 중 — 원하는 순간에 촬영하세요');
+      setPill('실시간 연결됨', 'live');
+      showBanner('카메라 권한이 허용되었어요.', 'ok');
+      setActiveStep(1);
+    }catch(err){
+      let msg = '카메라를 사용할 수 없어요. 사진 업로드로 진행해주세요.';
+      if(err && err.name === 'NotAllowedError') msg = '카메라 권한이 거부되었어요. 브라우저 주소창의 카메라 권한 설정을 확인해주세요.';
+      else if(err && err.name === 'NotFoundError') msg = '연결된 카메라를 찾을 수 없어요.';
+      else if(err && err.name === 'NotReadableError') msg = '다른 프로그램이 카메라를 사용 중이라 접근할 수 없어요.';
+      showBanner(msg, 'error'); setPill('권한 거부됨', '');
+    }
+  }
+
+  document.getElementById('btnFlip').addEventListener('click', async ()=>{
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    stopWebcam(); await startWebcam();
+  });
+  document.getElementById('btnGrid').addEventListener('click', (e)=>{
+    gridOn = !gridOn; gridSvg.classList.toggle('show', gridOn); e.currentTarget.classList.toggle('on', gridOn);
+  });
+  zoomSlider.addEventListener('input', ()=>{
+    zoomLevel = parseFloat(zoomSlider.value); zoomVal.textContent = zoomLevel.toFixed(2) + 'x';
+    webcamVideo.style.transform = `scaleX(-1) scale(${zoomLevel})`;
+  });
+
+  function flash(){
+    flashOverlay.classList.add('flash');
+    setTimeout(()=>{
+      flashOverlay.style.transition='opacity .35s ease'; flashOverlay.classList.remove('flash');
+      setTimeout(()=>{ flashOverlay.style.transition='opacity .1s ease'; }, 360);
+    }, 70);
+  }
+
+  document.getElementById('btnCapture').addEventListener('click', ()=>{
+    if(!activeStream) return;
+    flash();
+    const vw = webcamVideo.videoWidth, vh = webcamVideo.videoHeight;
+    if(!vw || !vh) return;
+    const cropW = vw / zoomLevel, cropH = vh / zoomLevel;
+    const sx = (vw - cropW) / 2, sy = (vh - cropH) / 2;
+    const tmp = document.createElement('canvas'); tmp.width = CANVAS_W; tmp.height = CANVAS_H;
+    const tctx = tmp.getContext('2d');
+    tctx.translate(CANVAS_W, 0); tctx.scale(-1, 1);
+    tctx.drawImage(webcamVideo, sx, sy, cropW, cropH, 0, 0, CANVAS_W, CANVAS_H);
+    const img = new Image();
+    img.onload = ()=>{
+      sourceImg = img; stopWebcam();
+      shutterArea.style.display = 'none'; camToolbar.style.display = 'none'; camToolStrip.style.display = 'none';
+      sliderArea.style.display = 'none';
+      emptyCanvasMsg.style.display = 'none';
+      startClickSampling();
+    };
+    img.src = tmp.toDataURL('image/png');
+  });
+
+  document.getElementById('btnCancelWebcam').addEventListener('click', ()=>{ stopWebcam(); if(!sourceImg) resetAll(); });
+  document.getElementById('btnUpload').addEventListener('click', ()=>{ stopWebcam(); fileInput.click(); });
+  document.getElementById('btnReset').addEventListener('click', resetAll);
+
+  fileInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    hideBanner();
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        sourceImg = img; sliderArea.style.display = 'none';
+        emptyCanvasMsg.style.display = 'none'; setPill('사진 불러옴', '');
+        startClickSampling();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  resetAll();
+})();
+</script>
+</body>
+</html>
